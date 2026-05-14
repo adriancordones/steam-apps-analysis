@@ -2,8 +2,7 @@
 documentclass: article
 
 header-includes:
-  - \input{format}
-  
+  - \input{tex/format}
   - \asignatura{Tipología y ciclo de la vida de los datos}
   - \actividad{PRACT1}
   - \titulo{Práctica 2}
@@ -12,11 +11,18 @@ header-includes:
         Agustín Barbatelli Balboa\\
         Adrián Cordones Martínez
       \end{tabular}}
+
 output:
   pdf_document:
     latex_engine: pdflatex
     number_sections: true
-    keep_tex: true
+    keep_tex: false
+
+knit: |
+  (function(input, ...) {
+    out_dir <- file.path(dirname(input), "..", "docs")
+    rmarkdown::render(input, output_dir = out_dir, output_file = "memoria.pdf", ...)
+  })
 ---
 
 ```{=latex}
