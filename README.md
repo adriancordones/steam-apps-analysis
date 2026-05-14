@@ -1,6 +1,6 @@
 # Limpieza y análisis: Steam Apps Metadata
 
-Estudio realizado utilizando datos recopilados de aplicaciones publicadas en la tienda de Steam (store.steampowered.com).
+Análisis estadístico utilizando datos recopilados de aplicaciones publicadas en la tienda de Steam (store.steampowered.com).
 
 ### Tabla de contenidos
 
@@ -13,7 +13,7 @@ Estudio realizado utilizando datos recopilados de aplicaciones publicadas en la 
 - `.gitignore`: Ficheros y directorios excluidos del control de versiones.
 - `LICENSE`: Licencia del proyecto (CC BY-NC-SA 4.0).
 - `README.md`: Descripción general del proyecto.
-- `source/main.rmd`: Punto de entrada: archivo principal que contiene toda la lógica de limpieza y análisis de los datos.
+- `source/main.rmd`: Archivo principal que contiene el código para la limpieza y el análisis de los datos.
 - `docs/memoria.pdf`: Memoria del proyecto resultante de ejecutar `source/main.rmd`.
 
 ## Integrantes del grupo
