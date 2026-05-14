@@ -1,0 +1,228 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Paquetes
+\usepackage[spanish,es-nolayout]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[table]{xcolor}
+\usepackage{tabularx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[a4paper,left=2.0cm,right=2.0cm,top=1.2cm,
+            headsep=3mm,headheight=2.3cm,includehead,
+            footskip=15mm]{geometry}
+\usepackage{float}
+\usepackage{listings}
+    \renewcommand{\lstlistingname}{Código}
+\usepackage{setspace}
+    \setstretch{1.15}
+\usepackage{enumitem}
+\usepackage{xurl}
+\usepackage[normalem]{ulem}
+\usepackage{hyperref}
+\usepackage{silence}
+\usepackage{parskip}
+
+\usepackage[most]{tcolorbox}
+\usepackage[none]{hyphenat}
+\sloppy
+
+\WarningFilter{latexfont}{Font shape `TS1/fav/m/n' undefined}
+\WarningFilter{latexfont}{Some font shapes were not available, defaults substituted.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Colores
+\color[HTML]{000078}
+\definecolor{bluetext}{HTML}{000078}
+\definecolor{celeste}{HTML}{73EDFF}
+\definecolor{gris}{HTML}{F0F0F0}
+\definecolor{httpcolor}{HTML}{0066CC}
+
+\hypersetup{
+    colorlinks=true,
+    urlcolor=httpcolor
+}
+
+\makeatletter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Encabezados y pies de página
+\usepackage{fancyhdr}
+    \fancyhf{}
+    \renewcommand{\headrulewidth}{0pt}
+    \fancyhead[L]{\hspace*{-1.0cm}
+    \includegraphics[width=18cm]{figs/encabezado.png}
+    }
+    \fancyfoot[R]{\hspace*{-1.0cm}\footnotesize
+    \begin{tabular}{@{}l@{\ \ }l@{\ \ }l@{\ \ }l@{}}
+        \textcolor[HTML]{73EDFF}{\rule{7cm}{0.9mm}} &
+        \textcolor[HTML]{73EDFF}{\rule{2.0cm}{0.9mm}} &
+        \textcolor[HTML]{73EDFF}{\rule{6cm}{0.9mm}} &
+        \textcolor[HTML]{73EDFF}{\rule{2.0cm}{0.9mm}} \\
+    \begin{tabular}[t]{@{}l@{}}%
+      \@asignatura\ \textbullet\ \@actividad \\%
+      Máster en Ciencia de datos%
+    \end{tabular} &
+    \@fechacorta &
+    \@autor &
+    pág. \thepage
+  \end{tabular}
+}
+\pagestyle{fancy}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Datos
+\newcommand{\@asignatura}{}
+\newcommand{\@actividad}{}
+\newcommand{\@titulo}{}
+\newcommand{\@subtitulo}{}
+\newcommand{\@autor}{}
+\newcommand{\@fecha}{\today}
+\newcommand{\@fechacorta}{}
+
+\newcommand{\asignatura}[1]{\renewcommand{\@asignatura}{#1}}
+\newcommand{\actividad}[1]{\renewcommand{\@actividad}{#1}}
+\newcommand{\titulo}[1]{\renewcommand{\@titulo}{#1}}
+\newcommand{\subtitulo}[1]{\renewcommand{\@subtitulo}{#1}}
+\newcommand{\autor}[1]{\renewcommand{\@autor}{#1}}
+\newcommand{\fecha}[1]{\renewcommand{\@fecha}{#1}}
+\newcommand{\fechacorta}[1]{\renewcommand{\@fechacorta}{#1}}
+
+% ----- Recuadro de criterios -----
+\newtcolorbox{criteriosbox}[1][]{%
+    colback=white,          % Fondo blanco
+    colframe=bluetext,      % Borde azul
+    coltext=bluetext,       % Texto azul
+    boxrule=0.6pt,          % Grosor del borde
+    boxsep=0pt,             % Evita doble padding al expandir
+    arc=0mm,                % Esquinas cuadradas
+    left=0.4cm, right=0.4cm, top=0.4cm, bottom=0.4cm,
+    before skip=0.2cm, after skip=1.4cm,
+    fonttitle=\bfseries,
+    title=#1
+}
+
+\newcommand{\criterios}[2]{%
+  \begin{criteriosbox}
+    \noindent\textbf{\large\underline{#1}}\par\vspace{2mm}
+    \begin{itemize}[itemsep=10pt, topsep=5pt]
+      #2
+    \end{itemize}
+  \end{criteriosbox}
+}
+
+% ---- Generar fecha corta automática ----
+\newcommand{\setfechacorta}{%
+  \ifnum\month<2
+    \edef\@fechacorta{\the\numexpr\year-1\relax.1}% enero -> semestre 2 del año anterior
+  \else
+    \ifnum\month<8
+      \edef\@fechacorta{\the\numexpr\year-1.2}% feb-jul -> semestre 2
+    \else
+      \edef\@fechacorta{\the\year.1}% ago-ene -> semestre 1
+    \fi
+  \fi
+}
+\setfechacorta
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Portada
+\newcommand{\portada}{
+    \newgeometry{margin=12mm}
+    \thispagestyle{empty}
+    \noindent
+    \fcolorbox{celeste}{celeste}{
+    \begin{minipage}[t][10cm][t]{18.1cm}
+    \flushleft
+    \hspace{0pt}\\
+    {\fontsize{45pt}{45pt}\selectfont \textbf{\@asignatura} \\}
+    \vspace{\fill}
+    {\fontsize{35pt}{35pt}\selectfont \@titulo \\[1cm]\hspace{0pt}}
+    \end{minipage}
+    }\\[9mm]
+    \includegraphics[width=6cm]{figs/portada.png}
+    \hspace{7mm}
+    \fcolorbox{gris}{gris}{
+    \begin{minipage}[b][15.59cm][t]{11.2cm}
+    \flushleft
+    \hspace{0pt}\\
+    \Huge
+    \textbf{\@autor}\\[1.5cm]
+    \LARGE
+    \@fecha
+    \end{minipage}
+    }
+    
+    \clearpage
+    \restoregeometry
+    
+    \noindent
+    \parbox{\linewidth}{\Huge\flushleft
+    {\bfseries \@titulo}
+    \ifthenelse{\equal{\@subtitulo}{}}{}{\\ \huge\@subtitulo}\\[1cm]
+    }
+}
+
+\newcommand{\sinportada}{
+    \noindent
+    \parbox{\linewidth}{\Huge\flushleft
+    {\bfseries \@titulo}
+    \ifthenelse{\equal{\@subtitulo}{}}{}{\\ \huge\@subtitulo}\\[1cm]
+    }
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Bibliografía
+\usepackage[babel]{csquotes}
+\usepackage[style=numeric,backend=biber,sorting=none]{biblatex}
+    \DeclareLanguageMapping{spanish}{spanish}
+    
+    \DefineBibliographyStrings{spanish}{%
+      andothers = {et al\adddot},
+    }
+    
+    \DefineBibliographyExtras{spanish}
+        {\setcounter{smartand}{1}% or some other value
+         \let\lbx@finalnamedelim=\lbx@es@smartand
+         \let\lbx@finallistdelim=\lbx@es@smartand}
+    
+    \setlength{\bibhang}{\parindent}  
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Leyendas
+\usepackage[font={small},labelfont={bf,small},
+  justification=centerlast,tablename=Tabla]{caption}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Código
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{celeste!20},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    linewidth=0.98\linewidth,
+    xleftmargin=0.5cm
+}
+
+\lstset{style=mystyle}
+
+
+\makeatother

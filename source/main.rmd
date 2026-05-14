@@ -1,0 +1,122 @@
+---
+documentclass: article
+
+header-includes:
+  - \input{format}
+  
+  - \asignatura{Tipología y ciclo de la vida de los datos}
+  - \actividad{PRACT1}
+  - \titulo{Práctica 2}
+  - \subtitulo{¿Cómo realizar la limpieza y análisis de los datos?}
+  - \autor{\begin{tabular}[t]{@{}l@{}}
+        Agustín Barbatelli Balboa\\
+        Adrián Cordones Martínez
+      \end{tabular}}
+output:
+  pdf_document:
+    latex_engine: pdflatex
+    number_sections: true
+    keep_tex: true
+---
+
+```{=latex}
+\sinportada
+
+\criterios{Metadatos}{
+  \item \textbf{Integrantes del grupo:}
+    \begin{itemize}
+      \item Agustín Barbatelli Balboa
+      \item Adrián Cordones Martínez
+    \end{itemize}
+    
+  \item \textbf{Enlace al repositorio con el código:}\\
+    \url{https://github.com/adriancordones/steam-apps-analysis}
+    
+  \item \textbf{Enlace al vídeo de explicación:}\\
+    \url{https://...}
+}
+```
+
+# Descripción
+
+<!-- TODO: Esta es la descripción de la Práctica 1, habrá que reajustarla al contexto de esta práctica. -->
+
+```{=latex}
+Este dataset recoge metadatos de aplicaciones publicadas en la \textit{Steam Store}, extraídos mediante web scraping de las páginas individuales de producto. Cada registro corresponde a un juego o aplicación e incluye información identificativa (título, desarrollador, editor), condiciones comerciales (precio, descuento), recepción por parte de los usuarios (número y resumen general de reseñas), características de contenido (DLCs, logros, idiomas, banda sonora) y clasificación temática (géneros y etiquetas de la comunidad). Los datos reflejan el estado de la tienda en el momento de la extracción (abril de 2026) y cubren los títulos más populares y recientes según los resultados de búsqueda de Steam para España y con la página en español.
+```
+
+# Integración y selección
+
+<!-- TODO: a) Integración: nuevas variables útiles, etc 
+           b) Selección: descartar variables no relevantes y quedarnos con las útiles
+-->
+
+```{=latex}
+...
+```
+
+# Limpieza de los datos
+
+<!-- TODO:
+- Realmente la parte de rehacer la/s columna/s con datos reguleros vendría aquí
+- NAs, nulos, etc: imputación, sustitución, etc
+- Transformación de variables según los estudios a realizar (ex: algunos tags pasarán a ser distintas variables bool)
+-->
+
+```{=latex}
+...
+```
+
+# Análisis de los datos
+
+<!-- TODO: ... -->
+
+```{=latex}
+...
+```
+
+# Representación de los resultados
+
+<!-- TODO: ... -->
+
+```{=latex}
+...
+```
+
+# Resolución del problema
+
+<!-- TODO -->
+
+```{=latex}
+...
+```
+
+# Código
+
+<!-- TODO -->
+
+```{=latex}
+...
+```
+
+# Vídeo
+
+<!-- TODO -->
+
+```{=latex}
+...
+```
+
+<!-- TODO: Re-ajustar referencias -->
+
+```{=latex}
+\begin{thebibliography}{9}\label{ref:Ref}
+  \bibitem{R1} De Luisa, A., Hartman, J., Nabergoj, D., Pahor, S., Rus, M., Stevanoski, B., Demšar, J. y Štrumbelj, E. (2021). Predicting the Popularity of Games on Steam. arXiv:2110.02896. URL: \url{https://arxiv.org/abs/2110.02896}
+  \bibitem{R2} Teja, A. S., Hanafi, M. L. I. y Qomariyah, N. N. (2023). Predicting Steam Games Rating with Regression. E3S Web of Conferences, ICOBAR 2023. URL: \url{https://www.e3s-conferences.org/articles/e3sconf/pdf/2023/25/e3sconf_icobar2023_02001.pdf}
+  \bibitem{R3} Creative Commons (2023) Licencia Creative Commons Atribución-NoComercial-CompartirIgual 4.0 Internacional. [En línea]. URL: \url{https://creativecommons.org/licenses/by-nc-sa/4.0/deed.es} [Consultado: abril de 2026].
+  \bibitem{R4} Subirats Maté, L. y Calvo González, M. (2019) Web scraping. Barcelona: Editorial UOC.
+  \bibitem{R5} Lawson, R. (2015) Web Scraping with Python: Successfully scrape data from any website with the power of Python. Birmingham: Packt Publishing. ISBN: 9781782164364.
+  \bibitem{R6} Scrapy developers (2026) Scrapy documentation (versión 2.14.2). [En línea]. URL: \url{https://docs.scrapy.org/en/latest/} [Consultado: abril de 2026].
+  \bibitem{R7} Valve Corporation (2026) Steam Store. [En línea]. URL: \url{https://store.steampowered.com} [Consultado: abril de 2026].
+\end{thebibliography}
+```
