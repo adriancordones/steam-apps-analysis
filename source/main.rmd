@@ -43,6 +43,18 @@ knit: |
 }
 ```
 
+Las librerías necesarias ...
+
+```{r setup, message = FALSE, warning = FALSE}
+library(dplyr)
+library(stringr)
+library(knitr)
+library(httr)
+
+knitr::opts_chunk$set(echo = TRUE)
+readRenviron(".Renviron")
+```
+
 # Descripción
 
 <!-- TODO: Esta es la descripción de la Práctica 1, habrá que reajustarla al contexto de esta práctica. -->
@@ -61,6 +73,88 @@ Este dataset recoge metadatos de aplicaciones publicadas en la \textit{Steam Sto
 ...
 ```
 
+```{r integración_1}
+# Carga del dataset
+df <- read.csv("../datasets/steam_apps.csv", sep = ",", dec = ".")
+# TODO: Arreglar para que no se rompan los caracteres de TM, (R), etc.
+
+# Función de ayuda
+get_var <- function(data, path) {
+  if (is.null(data)) return(NA)
+  result <- data
+  for (key in path) {
+    result <- result[[key]]
+    if (is.null(result)) return(NA)
+  }
+  return(result)
+}
+
+# Función genérica para requests
+get_response <- function(url, cooldown = 10) {
+  response <- tryCatch(GET(url, timeout(cooldown)), error = function(e) NULL)
+  if (is.null(response) || status_code(response) != 200) return(NULL)
+  data <- content(response, as = "parsed", type = "application/json")
+  
+  return(data)
+}
+
+# Función para consultas a API de Steam: restricciones de edad y reviews
+get_steam <- function(app_id) {
+  url <- paste0("https://store.steampowered.com/appreviews/", app_id, "?json=1&purchase_type=all&num_per_page=0")
+  data <- get_response(url)
+  total_positive <- get_var(data, c("query_summary", "total_positive"))
+  total_reviews <- get_var(data, c("query_summary", "total_reviews"))
+  
+  url <- paste0("https://store.steampowered.com/api/appdetails?appids=", app_id)
+  data <- get_response(url)
+  app_id <- as.character(app_id)
+  required_age <- get_var(data, c(app_id, "data", "required_age"))
+  pegi <- get_var(data, c(app_id, "data", "ratings", "pegi", "rating"))
+  
+  result <- list(total_positive = total_positive, total_reviews = total_reviews,
+                required_age = required_age, pegi = pegi)
+  
+  return(result)
+}
+
+# Función para consultas a API de SteamSpy: ventas estimadas
+get_steamspy <- function(app_id, cooldown = 1) {
+  url <- paste0("https://steamspy.com/api.php?request=appdetails&appid=", app_id)
+  data <- get_response(url)
+  owners <- get_var(data, c("owners"))
+  
+  return(owners)
+}
+
+api_key <- Sys.getenv("ITAD_KEY")
+# Función para consultas a API de ITAD: pico máximo de jugadores
+get_itad <- function(app_id) {
+  url <- paste0("https://api.isthereanydeal.com/games/lookup/v1?key=", api_key, "&appid=", app_id)
+  data <- get_response(url)
+  itad_id <- get_var(data, c("game", "id"))
+  
+  url <- paste0("https://api.isthereanydeal.com/games/info/v2?key=", api_key, "&id=", itad_id)
+  data <- get_response(url)
+  players_peak <- get_var(data, c("players", "peak"))
+  
+  return(players_peak)
+}
+
+# TODO: Pruebas para 5 primeros, esto debe generalizarse (e incorporar tiempos de espera)
+# Steam
+steam_results <- lapply(df$id[1:5], function(id) get_steam(id))
+df[1:5, "total_positive"] <- sapply(steam_results, function(x) x$total_positive)
+df[1:5, "total_reviews"] <- sapply(steam_results, function(x) x$total_reviews)
+df[1:5, "required_age"] <- sapply(steam_results, function(x) x$required_age)
+df[1:5, "pegi"] <- sapply(steam_results, function(x) x$pegi)
+# SteamSpy
+steamspy_results <- lapply(df$id[1:5], get_steamspy)
+df[1:5, "owners"] <- sapply(steamspy_results, function(x) x)
+# ITAD
+itad_results <- lapply(df$id[1:5], function(id) get_itad(id))
+df[1:5, "players_peak"] <- sapply(itad_results, function(x) x)
+```
+
 # Limpieza de los datos
 
 <!-- TODO:
@@ -73,17 +167,51 @@ Este dataset recoge metadatos de aplicaciones publicadas en la \textit{Steam Sto
 ...
 ```
 
+```{r limpieza_1}
+# Selección de variables relevantes
+df <- df %>%
+  select(title, date, original_price, achievements_number, langs_number, dlcs_number, has_ost, is_dlc, is_ost, genres,
+         total_positive, total_reviews, required_age, pegi, owners, players_peak)
+```
+
+Creación de columnas booleanas para cada género.
+
+```{r limpieza_2}
+genre_names <- unique(unlist(strsplit(df$genres, "\\|")))
+
+genre_cols <- genre_names %>%
+  str_to_lower() %>%
+  str_replace_all("&", "and") %>%
+  str_replace_all("\\s+", "_")
+
+for (i in seq_along(genre_cols)) {
+  col_name <- paste0("is_", genre_cols[i])
+  df[[col_name]] <- str_detect(df$genres, fixed(genre_names[i]))
+}
+
+# TODO: Falta dropear 'genres'
+```
+
 # Análisis de los datos
 
-<!-- TODO: ... -->
+<!-- TODO:
+- Modelo supervisado: ...
+- Modelo no supervisado: ...
+- Contraste de hipótesis: ...
+-->
 
 ```{=latex}
 ...
 ```
 
+```{r análisis_1}
+# Guardado del dataset resultante
+write.csv(df, "../datasets/steam_apps_cleaned.csv", row.names = FALSE)
+```
+
 # Representación de los resultados
 
-<!-- TODO: ... -->
+<!-- TODO -->
 
 ```{=latex}
 ...
@@ -113,16 +241,42 @@ Este dataset recoge metadatos de aplicaciones publicadas en la \textit{Steam Sto
 ...
 ```
 
+# Participación de los integrantes {-}
+
+```{=latex}
+{\renewcommand{\arraystretch}{1.8}
+\setlength{\arrayrulewidth}{1pt}
+
+A continuación, se muestra la tabla de firmas que recoge la contribución de cada integrante a la práctica.
+
+\vspace{0.4cm}
+\begin{tabularx}{\linewidth}{|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X|}
+  \hline
+  \rowcolor{bluetext!20}
+  \textbf{Contribuciones} & \textbf{Firma} \\
+  \hline
+  Investigación previa & \textit{Firmar aquí} \\
+  \hline
+  Redacción de las respuestas & \textit{Firmar aquí} \\
+  \hline
+  Desarrollo del código & \textit{Firmar aquí} \\
+  \hline
+  Participación en el vídeo & \textit{Firmar aquí} \\
+  \hline
+\end{tabularx}}
+
+\vspace{0.5cm}
+```
+
+
 <!-- TODO: Re-ajustar referencias -->
 
 ```{=latex}
 \begin{thebibliography}{9}\label{ref:Ref}
-  \bibitem{R1} De Luisa, A., Hartman, J., Nabergoj, D., Pahor, S., Rus, M., Stevanoski, B., Demšar, J. y Štrumbelj, E. (2021). Predicting the Popularity of Games on Steam. arXiv:2110.02896. URL: \url{https://arxiv.org/abs/2110.02896}
-  \bibitem{R2} Teja, A. S., Hanafi, M. L. I. y Qomariyah, N. N. (2023). Predicting Steam Games Rating with Regression. E3S Web of Conferences, ICOBAR 2023. URL: \url{https://www.e3s-conferences.org/articles/e3sconf/pdf/2023/25/e3sconf_icobar2023_02001.pdf}
-  \bibitem{R3} Creative Commons (2023) Licencia Creative Commons Atribución-NoComercial-CompartirIgual 4.0 Internacional. [En línea]. URL: \url{https://creativecommons.org/licenses/by-nc-sa/4.0/deed.es} [Consultado: abril de 2026].
-  \bibitem{R4} Subirats Maté, L. y Calvo González, M. (2019) Web scraping. Barcelona: Editorial UOC.
-  \bibitem{R5} Lawson, R. (2015) Web Scraping with Python: Successfully scrape data from any website with the power of Python. Birmingham: Packt Publishing. ISBN: 9781782164364.
-  \bibitem{R6} Scrapy developers (2026) Scrapy documentation (versión 2.14.2). [En línea]. URL: \url{https://docs.scrapy.org/en/latest/} [Consultado: abril de 2026].
-  \bibitem{R7} Valve Corporation (2026) Steam Store. [En línea]. URL: \url{https://store.steampowered.com} [Consultado: abril de 2026].
+  
+  \bibitem{R1} Subirats, L., Pérez, D.O., Calvo, M. (2019). \textit{Introducción al ciclo de vida de los datos}. [Recurso de aprendizaje textual]. 1.a ed. Barcelona: Fundació Universitat Oberta de Catalunya (FUOC).
+  
+  \bibitem{R2} Munzert, S., Rubba, C., Meißner, P., Nyhuis, D. (2015). \textit{Automated Data Collection with R: A Practical Guide to Web Scraping and Text Mining}. John Wiley \& Sons, Ltd. ISBN: 978-1-118-83481-7
+
 \end{thebibliography}
 ```
