@@ -51,7 +51,7 @@ library(stringr)
 library(knitr)
 library(httr)
 
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 readRenviron(".Renviron")
 ```
 
@@ -140,7 +140,7 @@ get_itad <- function(app_id) {
   return(players_peak)
 }
 
-# TODO: Pruebas para 5 primeros, esto debe generalizarse (e incorporar tiempos de espera)
+# TODO: Pruebas para 500 primeros, esto debe generalizarse (e incorporar tiempos de espera)
 # Steam
 steam_results <- lapply(df$id[1:5], function(id) get_steam(id))
 df[1:5, "total_positive"] <- sapply(steam_results, function(x) x$total_positive)
@@ -191,55 +191,76 @@ for (i in seq_along(genre_cols)) {
 
 # TODO: Falta dropear 'genres'
 ```
-
 # Análisis de los datos
 
-<!-- TODO:
-- Modelo supervisado: ...
-- Modelo no supervisado: ...
-- Contraste de hipótesis: ...
--->
+En esta sección se aplican técnicas de análisis estadístico y aprendizaje no supervisado sobre el dataset limpio. El objetivo principal es estudiar si existen diferencias entre los juegos clasificados como indie y no indie respecto a las ventas estimadas, representadas mediante la variable `owners`.
 
-```{=latex}
-...
-```
+Para este análisis se utilizó el archivo `steam_apps_cleaned.csv`, generado tras la etapa de limpieza. Además, se desarrolló un script independiente, `analysis_agustin.R`, que contiene el código específico del contraste de hipótesis, PCA, K-Means y generación de gráficos.
 
-```{r análisis_1}
-# Guardado del dataset resultante
-write.csv(df, "../datasets/steam_apps_cleaned.csv", row.names = FALSE)
+Para evitar tiempos excesivos de consulta y posibles limitaciones de las APIs externas, el análisis se realizó sobre una muestra de 500 juegos del dataset original. Esta muestra permite trabajar con un volumen suficiente de observaciones para el contraste estadístico y el análisis no supervisado, manteniendo el proceso reproducible y manejable.
+
+## Contraste de hipótesis: juegos indie y ventas estimadas
+
+La hipótesis planteada es la siguiente:
+
+- H0: no existen diferencias significativas en la distribución de owners estimados entre juegos indie y no indie.
+- H1: existen diferencias significativas en la distribución de owners estimados entre juegos indie y no indie.
+
+Dado que la variable `owners` procede de SteamSpy en forma de rangos estimados, se transformó cada rango en un valor numérico aproximado calculando el promedio entre los límites inferior y superior. Posteriormente, se compararon las distribuciones de juegos indie y no indie.
+
+Antes de aplicar el contraste se revisó la normalidad mediante el test de Shapiro-Wilk. Debido a la naturaleza asimétrica de la variable de ventas estimadas y a la presencia de valores extremos, se utilizó el contraste no paramétrico de Wilcoxon-Mann-Whitney.
+
+```{r analisis_contraste, echo=FALSE, message=FALSE, warning=FALSE}
+summary_indie <- read.csv("../results/summary_indie_owners.csv")
+wilcox_result <- read.csv("../results/wilcox_indie_owners.csv")
+
+knitr::kable(summary_indie, caption = "Resumen descriptivo de owners estimados por tipo de juego")
+knitr::kable(wilcox_result, caption = "Resultado del contraste Wilcoxon-Mann-Whitney")
 ```
+El contraste Wilcoxon-Mann-Whitney obtuvo un valor p inferior a 0,05, por lo que se rechaza la hipótesis nula. Esto indica que existen diferencias estadísticamente significativas entre la distribución de owners estimados de juegos indie y no indie dentro de la muestra analizada.
 
 # Representación de los resultados
 
-<!-- TODO -->
+A continuación, se presentan las principales visualizaciones generadas durante el análisis exploratorio y el análisis no supervisado.
 
-```{=latex}
-...
+El primer gráfico muestra la distribución de owners estimados entre juegos indie y no indie. Se utilizó una escala logarítmica debido a la presencia de valores extremos y diferencias muy grandes entre juegos con pocas y muchas ventas.
+
+```{r fig_boxplot_indie, echo=FALSE, out.width="85%", fig.align="center"}
+knitr::include_graphics("../figs/boxplot_indie_owners.png")
 ```
+
+El boxplot permite observar que ambos grupos presentan una alta dispersión, aunque los juegos indie muestran una mediana ligeramente superior. También se observan valores extremos en ambos grupos, correspondientes a juegos con una cantidad excepcionalmente alta de owners estimados.
+
+La siguiente visualización corresponde al análisis PCA, utilizado para reducir la dimensionalidad de las variables numéricas del dataset y representar los juegos en un espacio bidimensional.
+
+```{r fig_pca, echo=FALSE, out.width="85%", fig.align="center"}
+knitr::include_graphics("../figs/pca_juegos_zoom.png")
+```
+
+El análisis PCA permitió reducir la dimensionalidad de las variables numéricas del dataset y representar los juegos en dos componentes principales. En esta representación se observa una superposición importante entre juegos indie y no indie, por lo que la etiqueta indie no explica por sí sola toda la estructura multivariable de los datos.
+
+```{r fig_kmeans, echo=FALSE, out.width="85%", fig.align="center"}
+knitr::include_graphics("../figs/kmeans_clusters_zoom.png")
+```
+
+El algoritmo K-Means permitió identificar tres agrupaciones principales de juegos con características similares. Estos clusters no deben interpretarse como categorías comerciales cerradas, sino como perfiles generados a partir de las variables numéricas utilizadas. Algunos grupos concentran juegos más próximos al centro del espacio PCA, mientras que otros reflejan comportamientos más diferenciados.
 
 # Resolución del problema
 
-<!-- TODO -->
+A partir de los resultados obtenidos, se observa que los juegos indie presentan una mediana de owners estimados superior a la de los juegos no indie dentro del dataset analizado. No obstante, los juegos no indie presentan una mayor dispersión, lo que sugiere una variabilidad comercial más elevada.
 
-```{=latex}
-...
-```
+El contraste de Wilcoxon-Mann-Whitney permite evaluar formalmente si las diferencias observadas entre ambos grupos son estadísticamente significativas. Por otro lado, el PCA y el K-Means muestran que la clasificación indie/no indie no explica completamente la estructura del dataset, ya que los juegos también se agrupan según otras variables numéricas.
+
+En conjunto, los resultados permiten responder parcialmente al problema planteado: la categoría indie parece asociarse a diferencias en las ventas estimadas, aunque no explica por sí sola todos los patrones presentes en los datos.
 
 # Código
 
-<!-- TODO -->
-
-```{=latex}
-...
-```
+El código utilizado para la limpieza, análisis y visualización de los datos se encuentra disponible en el repositorio del proyecto, incluyendo el script analysis_agustin.R desarrollado específicamente para esta práctica.
 
 # Vídeo
 
-<!-- TODO -->
+El vídeo explicativo resume las etapas principales de la práctica, incluyendo la obtención de datos mediante web scraping, el proceso de limpieza, el contraste de hipótesis y la aplicación de técnicas de aprendizaje no supervisado.
 
-```{=latex}
-...
-```
 
 # Participación de los integrantes {-}
 
