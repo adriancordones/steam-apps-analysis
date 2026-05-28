@@ -1,0 +1,843 @@
+---
+documentclass: article
+
+header-includes:
+  - \input{tex/format}
+  - \asignatura{Tipología y ciclo de la vida de los datos}
+  - \actividad{PRACT1}
+  - \titulo{Práctica 2}
+  - \subtitulo{¿Cómo realizar la limpieza y análisis de los datos?}
+  - \autor{\begin{tabular}[t]{@{}l@{}}
+        Agustín Barbatelli Balboa\\
+        Adrián Cordones Martínez
+      \end{tabular}}
+
+output:
+  pdf_document:
+    latex_engine: pdflatex
+    number_sections: true
+    keep_tex: false
+---
+
+```{=latex}
+\sinportada
+
+\criterios{Metadatos}{
+  \item \textbf{Integrantes del grupo:}
+    \begin{itemize}
+      \item Agustín Barbatelli Balboa
+      \item Adrián Cordones Martínez
+    \end{itemize}
+    
+  \item \textbf{Enlace al repositorio con el código:}\\
+    \url{https://github.com/adriancordones/steam-apps-analysis}
+    
+  \item \textbf{Enlace al vídeo de explicación:}\\
+    \url{https://...}
+}
+```
+
+```{r part1, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(scales)
+library(ggplot2)
+library(randomForest)
+library(caret)
+library(uwot)
+library(cluster)
+library(clue)
+library(effsize)
+
+# Paths de interés
+dfs_path <- "../datasets"
+fig_path <- "figs"
+res_path <- "results"
+# Comprobación de que los paths existen (y si no, se crean)
+check_dir <- function(path) {
+  if (!dir.exists(path)) dir.create(path, recursive = TRUE)
+}
+paths <- c(dfs_path, fig_path)
+for (i in 1:length(paths)) {
+  check_dir(paths[i])
+}
+
+# Carga del dataset de partida
+df_path <- paste(dfs_path, "steam_apps_temp.csv", sep = "/")
+df <- read.csv(df_path, sep = ",", dec = ".")
+
+#### Selección de los datos ####
+
+# Variables descriptivas (en su mayoría predictoras, y algunas de apoyo)
+df <- df %>%
+  select(title, date, original_price, achievements_number, langs_number, dlcs_number, has_ost, is_dlc, is_ost, genres,
+         total_positive, total_reviews, required_age, pegi, owners, players_peak)
+```
+
+# Descripción del dataset
+
+```{=latex}
+El dataset de partida recoge metadatos de aplicaciones publicadas en la \textit{Steam Store}, extraídos mediante web scraping de las páginas individuales de producto. Cada registro corresponde a un juego o aplicación e incluye información identificativa (título, desarrollador, editor), condiciones comerciales (precio, descuento), recepción por parte de los usuarios (número y resumen general de reseñas), características de contenido (DLCs, logros, idiomas, banda sonora) y clasificación temática (géneros y etiquetas de la comunidad). Los datos reflejan el estado de la tienda en el momento de la extracción (abril de 2026) y cubren los títulos más populares y recientes según los resultados de búsqueda de Steam para España.
+
+\vspace{0.2cm}
+\textbf{Campos (26 por registro):}
+\begin{itemize}
+  \setlength{\itemsep}{-6pt}
+  \item \texttt{id}: Identificador numérico de la aplicación en Steam.
+  \item \texttt{title}: Nombre del producto tal como aparece en la Steam Store.
+  \item \texttt{date}: Fecha de lanzamiento.
+  \item \texttt{developer\_name}: Nombre del desarrollador.
+  \item \texttt{publisher\_name}: Nombre del editor.
+  \item \texttt{reviews\_total}: Número total de reseñas de usuarios.
+  \item \texttt{reviews\_recent}: Número de reseñas recientes de usuarios.
+  \item \texttt{reviews\_total\_summary}: Etiqueta de valoración general (p. ej., ''Overwhelmingly Positive'').
+  \item \texttt{reviews\_recent\_summary}: Etiqueta de valoración de las reseñas recientes.
+  \item \texttt{original\_price}: Precio base en euros.
+  \item \texttt{discount\_price}: Precio con descuento en euros. Nulo si no hay descuento activo.
+  \item \texttt{discount\_percent}: Porcentaje de descuento activo (\%). Nulo si no hay descuento activo.
+  \item \texttt{achievements\_number}: Número de logros de Steam.
+  \item \texttt{langs\_number}: Número de idiomas compatibles.
+  \item \texttt{dlcs\_number}: Número de DLC, excluyendo bandas sonoras si las hubiera.
+  \item \texttt{has\_ost}: Booleano. Verdadero si la aplicación tiene una banda sonora oficial disponible.
+  \item \texttt{is\_dlc}: Booleano. Verdadero si el propio producto es un DLC.
+  \item \texttt{is\_ost}: Booleano. Verdadero si el propio producto es una banda sonora.
+  \item \texttt{short\_desc}: Descripción breve del producto tal como aparece en la página de la tienda.
+  \item \texttt{dlcs}: Lista separada de nombres de DLC (separador "|"). Excluye bandas sonoras.
+  \item \texttt{tags}: Lista separada de etiquetas asignadas por la comunidad (separador "|").
+  \item \texttt{genres}: Lista separada de géneros oficiales de Steam (separador "|").
+  \item \texttt{languages}: Lista separada de idiomas compatibles (separador "|").
+  \item \texttt{url}: URL de la página del producto en la Steam Store.
+  \item \texttt{developer\_url}: URL de la página del desarrollador en la Steam Store. Nulo si no existe página dedicada.
+  \item \texttt{publisher\_url}: URL de la página del editor en la Steam Store. Nulo si no existe página dedicada.
+\end{itemize}
+
+\vspace{0.2cm}
+Comprender qué factores determinan el éxito comercial de un videojuego en Steam es una cuestión de gran relevancia práctica tanto para estudios independientes como para publishers consolidados. El mercado de Steam cuenta con decenas de miles de títulos y una competencia creciente, lo que hace que la visibilidad y las ventas estén muy desigualmente distribuidas. Ampliando los campos del dataset, podríamos abordar esta cuestión desde múltiples ángulos. Por ejemplo, podríamos preguntarnos qué tipo de producto tiene mayor probabilidad de alcanzar cierto umbral de ventas, qué características comparten los juegos más exitosos o en qué segmento de precio se concentra la oferta con mejor recepción. En conjunto, los análisis que se van a realizar ofrecen una base cuantitativa que puede orientar decisiones estratégicas antes de adentrarse en el desarrollo de un título.
+```
+
+# Integración y selección de los datos
+
+## Integración
+
+```{=latex}
+Para enriquecer este dataset con información que no estaba disponible directamente al hacer web scraping de las páginas de Steam y que sea de interés para los análisis, se realizó una integración de datos procedentes de tres fuentes externas mediante sus respectivas APIs públicas.
+
+La primera fuente es la propia API de Steam, de la que se extrajeron el número total de valoraciones positivas y el total de valoraciones (\texttt{total\_positive}, \texttt{total\_reviews}), que aunque ya estaban recogidas en las variables \texttt{reviews\_total} y \texttt{reviews\_total\_summary}, esta última era categórica y sus valores vienen dados por tramos que Steam asigna según criterios propios, lo cual no era conveniente para los análisis. También se recogieron la restricción de edad oficial (\texttt{required\_age}) y la clasificación PEGI (\texttt{pegi}), que aunque miden lo mismo, se transformarán en la siguiente sección en una variable común.
+
+La segunda fuente es \textit{SteamSpy}, un servicio de estimación de ventas que proporciona el campo \texttt{owners}, con rangos de propietarios estimados por tramos. El método que utiliza esta API es el que ofrece mayor precisión frente a otros probados. Sin embargo, el problema con el enfoque utilizado es que no funciona tan bien para juegos pequeños, ya que el margen de error es demasiado grande. Se debe tener en cuenta esto a la hora de realizar los análisis.
+
+La tercera fuente es \textit{IsThereAnyDeal} (o \textit{ITAD}, API para la que fue necesaria obtener una API-key particular), de la que se obtuvo el pico histórico de jugadores simultáneos (\texttt{players\_peak}). Esta es una métrica útil para aproximar la popularidad o el éxito de un juego en términos de su engagement máximo, aunque debe interpretarse con cuidado, ya que no discrimina entre picos sostenidos o puntuales.
+
+Todas las consultas se realizaron respetando los límites documentados en cada API, siguiendo los mismos principios de scraping ético aplicados en la Práctica 1 (retardos entre peticiones, headers adecuados, respetar el \texttt{robots.txt}, etc.).
+```
+
+## Selección
+
+```{=latex}
+Tras la integración, se realizó una selección de variables orientada al objetivo principal, es decir, predecir y caracterizar el nivel de ventas estimadas de aplicaciones de Steam. De las 26 variables originales más las 6 integradas, se seleccionaron 16 variables que eran de interés para los análisis o, en caso contrario, útiles para los análisis exploratorios y representaciones gráficas. Estas variables no son las finales, pues algunas de ellas se transformarían o se combinarían como se explica y se muestra en la próxima sección.
+```
+
+
+# Limpieza de los datos
+
+## Transformación de variables
+
+```{=latex}
+En primer lugar, la variable \texttt{owners} procedente de SteamSpy se renombró a \texttt{estimate\_sales} y se transformó en una variable categórica ordinal con cinco niveles: \textit{low}, \textit{medium\_low}, \textit{medium}, \textit{medium\_high} y \textit{high}, agrupando los rangos originales de SteamSpy en función de su magnitud y teniendo en cuenta así el nivel de incertidumbre para los casos con pocas ventas. Esta variable actuará como variable objetivo.
+
+\vspace{0.4cm}
+```
+
+```{r part2, echo=FALSE}
+#### Limpieza de los datos ####
+
+## Parte 1. Transformación de variables
+
+# Transformación de columna 'owners' a variable objetivo 'estimate_sales' (categórica)
+cat("Valores únicos de 'owners':\n")
+print(sort(unique(df$owners)))
+df <- df %>%
+  rename(estimate_sales = owners) %>%
+  mutate(estimate_sales = case_when(
+    estimate_sales %in% c("0 .. 20,000", "20,000 .. 50,000", "50,000 .. 100,000") ~ "low",
+    estimate_sales %in% c("100,000 .. 200,000", "200,000 .. 500,000") ~ "medium_low",
+    estimate_sales %in% c("500,000 .. 1,000,000", "1,000,000 .. 2,000,000") ~ "medium",
+    estimate_sales %in% c("2,000,000 .. 5,000,000", "5,000,000 .. 10,000,000") ~ "medium_high",
+    estimate_sales %in% c("10,000,000 .. 20,000,000", "20,000,000 .. 50,000,000", "50,000,000 .. 100,000,000") ~ "high",
+    .default = NA) %>%
+    factor(levels = c("low", "medium_low", "medium", "medium_high", "high"), ordered = TRUE))
+cat("COMPROBACIÓN: Valores únicos de 'estimate_sales':\n")
+print(sort(unique(df$estimate_sales)))
+```
+
+```{=latex}
+\vspace{0.4cm}
+La variable \texttt{date} se transformó en una variable categórica ordinal por trimestre y año (con formato \texttt{Q\textit{n}-\textit{YYYY}}). Esta transformación reduce la granularidad de la fecha de lanzamiento a un nivel más adecuado para el análisis. Aunque siguen siendo bastantes valores únicos, es un número muy inferior al que se daba cuando se presentaban las fechas completas.
+\vspace{0.4cm}
+```
+
+```{r part3, echo=FALSE}
+# Transformación de columna 'date' a categórica
+df <- df %>%
+  mutate(date = case_when(
+    str_detect(str_to_title(date), "Jan|Feb|Mar") ~ paste0("Q1-", str_extract(date, "\\d{4}")),
+    str_detect(str_to_title(date), "Apr|May|Jun") ~ paste0("Q2-", str_extract(date, "\\d{4}")),
+    str_detect(str_to_title(date), "Jul|Aug|Sep") ~ paste0("Q3-", str_extract(date, "\\d{4}")),
+    str_detect(str_to_title(date), "Oct|Nov|Dec") ~ paste0("Q4-", str_extract(date, "\\d{4}")),
+    .default = NA)) %>%
+  mutate(date = factor(date, levels = unique(date[order(str_extract(date, "\\d{4}"), str_extract(date, "Q\\d"))]), ordered = TRUE))
+cat("COMPROBACIÓN: Valores únicos de 'date':\n")
+print(sort(unique(df$date)))
+
+# Corrección de columnas 'has_ost', 'is_dlc' y 'is_ost' a verdaderos bools
+df <- df %>%
+  mutate(across(c(has_ost, is_dlc, is_ost), as.logical))
+
+# Creación de columnas booleanas para cada género
+genre_names <- unique(unlist(strsplit(df$genres, "\\|")))
+genre_cols <- genre_names %>%
+  str_to_lower() %>%
+  str_replace_all("&", "and") %>%
+  str_replace_all("\\s+", "_")
+for (i in seq_along(genre_cols)) {
+  col_name <- paste0("is_", genre_cols[i])
+  df[[col_name]] <- str_detect(df$genres, fixed(genre_names[i]))
+}
+# Corrección de columna 'is_strategy' y eliminación de 'is_estrategia'
+df <- df %>%
+  mutate(is_strategy = is_strategy | is_estrategia) %>%
+  select(-is_estrategia)
+# Eliminación de columna 'genres' original tras transformación
+df <- df %>%
+  select(-genres)
+```
+
+```{=latex}
+\vspace{0.4cm}
+Las columnas \texttt{has\_ost}, \texttt{is\_dlc} e \texttt{is\_ost} necesitaron corrección de tipos. Estas se convirtieron explícitamente a tipo lógico, ya que habían sido leídas como cadenas de texto.
+
+A partir de la columna \texttt{genres}, se generaron variables booleanas independientes para cada género detectado en el dataset (por ejemplo, \texttt{is\_action}, \texttt{is\_indie}, \texttt{is\_rpg}...), utilizando el separador \texttt{"|"} que existía en el dataset de partida como delimitador. Durante este proceso se detectó una inconsistencia en los datos originales. Esta consistía en un registro que contenía el género \textit{Estrategia} en español en lugar de \textit{Strategy} en inglés, lo que generó una columna \texttt{is\_estrategia}. Esta columna se fusionó con \texttt{is\_strategy}, corrigiendo el valor correspondiente y pasando a eliminar la duplicada. La columna \texttt{genres} original se eliminó tras esta transformación al quedar su información distribuida en las nuevas variables booleanas.
+```
+
+## Tratamiento de valores perdidos
+
+```{=latex}
+Previamente a la imputación, se realizó una comprobación del número de valores perdidos por columna. A continuación se muestran sólo aquellas columnas que tenían valores perdidos llegados a este punto.
+\vspace{0.4cm}
+```
+
+```{r part4, echo=FALSE}
+## Parte 2. Imputación de NAs
+
+# Comprobación previa
+cat("Recuento de NAs por columnas:\n")
+na_counts <- colSums(is.na(df))
+print(na_counts[na_counts > 0])
+```
+
+```{=latex}
+\vspace{0.4cm}
+La variable \texttt{required\_age} presentaba un valor perdido, al igual que \texttt{pegi} que tenía bastantes más. Dado que ambas variables miden esencialmente lo mismo (restricción de edad), se combinaron tomando el máximo entre ambas para cada registro, tratando los NAs como cero. La variable \texttt{pegi} se eliminó tras esta operación al quedar su información absorbida por \texttt{required\_age}.
+\vspace{0.4cm}
+```
+
+```{r part5, echo=FALSE}
+# Transformación de columna 'required_age' usando la misma y 'pegi' + imputación de NAs
+cat("Valores únicos de 'required_age':\n")
+print(sort(unique(df$required_age)))
+cat("Valores únicos de 'pegi':\n")
+print(sort(unique(df$pegi)))
+
+df <- df %>%
+  mutate(required_age = pmax(replace_na(required_age, 0), replace_na(pegi, 0), na.rm = TRUE)) %>%
+  select(-pegi)
+
+cat("COMPROBACIÓN: Valores únicos de 'required_age':\n")
+print(sort(unique(df$required_age)))
+
+# Imputación para 'players_peak'
+df <- df %>%
+  mutate(langs_number = replace(langs_number, is.na(langs_number), 0)) %>%
+  mutate(langs_number = as.integer(langs_number))
+
+# Imputación para 'langs_number'
+df <- df %>%
+  mutate(players_peak = replace(players_peak, is.na(players_peak), 0)) %>%
+  mutate(players_peak = as.integer(players_peak))
+```
+
+```{=latex}
+\vspace{0.4cm}
+Para \texttt{langs\_number} y \texttt{players\_peak}, considerando que no eran demasiados, se observaron los casos correspondiente manualmente. Los del primer caso se debía a que eran OSTs, que no tienen idiomas de por si. Los del segundo eran casos muy particulares, como juegos recientes o en early access. Por tanto, la ausencia de dato en estos campos indicaba respectivamente ausencia de idiomas registrados y ausencia de actividad de jugadores documentada, por lo que se optó por imputar estos valores perdidos con cero en ambos casos. Se corrigió el tipo de ambas variables pasando a ser de tipo entero.
+```
+
+## Tratamiento de valores extremos
+
+```{=latex}
+En el dataset analizado, la mayor parte de las variables numéricas no presentan valores extremos problemáticos en sentido estricto. Las variables de conteo como \texttt{achievements\_number}, \texttt{langs\_number} o \texttt{dlcs\_number} tienen valores legítimos que no constituyen de errores. Lo mismo ocurre con \texttt{players\_peak}, donde los juegos más populares presentan picos de millones de jugadores que provienen de mediciones reales.
+
+\vspace{0.6cm}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/price_boxplot.png}
+  \caption{Distribución de precios según tipo de juego}
+\end{figure}
+
+\vspace{0.2cm}
+
+La única variable donde se aplicó un tratamiento explícito de valores extremos fue \texttt{original\_price}, en el contexto del contraste de hipótesis (apartado 4.3). Al comparar el precio de juegos en Early Access frente al resto, se detectó un pequeño número de registros con precios superiores a 80€ en el grupo de juegos fuera del Early Access. Estos valores corresponden a productos especializados o de naturaleza no convencional que no son representativos del mercado de videojuegos en Steam y que distorsionaban significativamente la distribución del grupo. Por ello, se eliminaron tanto del subconjunto utilizado para el contraste como del dataset final.
+```
+
+## Resultado final
+
+```{=latex}
+\textbf{Campos tras la limpieza (35 por registro):}
+\begin{itemize}
+  \setlength{\itemsep}{-6pt}
+  \item \texttt{title}: Nombre del producto. \textit{(Variable apoyo)}
+  \item \texttt{date}: Trimestre y año de lanzamiento, en formato \texttt{Q\textit{n}-\textit{YYYY}}. \textit{(Variable predictora)}
+  \item \texttt{original\_price}: Precio actual en euros. \textit{(Variable predictora)}
+  \item \texttt{achievements\_number}: Número de logros de Steam. \textit{(Variable predictora)}
+  \item \texttt{langs\_number}: Número de idiomas compatibles. \textit{(Variable predictora)}
+  \item \texttt{dlcs\_number}: Número de DLCs disponibles. \textit{(Variable predictora)}
+  \item \texttt{has\_ost}: Booleano. Verdadero si la aplicación tiene banda sonora oficial disponible. \textit{(Variable predictora)}
+  \item \texttt{is\_dlc}: Booleano. Verdadero si el propio producto es un DLC. \textit{(Variable apoyo)}
+  \item \texttt{is\_ost}: Booleano. Verdadero si el propio producto es una banda sonora. \textit{(Variable apoyo)}
+  \item \texttt{total\_positive}: Número total de valoraciones positivas de usuarios. \textit{(Variable predictora)}
+  \item \texttt{total\_reviews}: Número total de valoraciones de usuarios. \textit{(Variable predictora)}
+  \item \texttt{required\_age}: Restricción de edad mínima recomendada, combinando \texttt{required\_age} y \texttt{pegi} originales. \textit{(Variable predictora)}
+  \item \texttt{estimate\_sales}: Categoría de ventas estimadas (\textit{low}, \textit{medium\_low}, \textit{medium}, \textit{medium\_high}, \textit{high}). \textbf{(Variable objetivo)}
+  \item \texttt{players\_peak}: Pico histórico de jugadores simultáneos. \textit{(Variable predictora)}
+  \item \texttt{is\_action}: Booleano. Verdadero si el juego pertenece al género \textit{Action}. \textit{(Variable predictora)}
+  \item \texttt{is\_adventure}: Booleano. Verdadero si el juego pertenece al género \textit{Adventure}. \textit{(Variable predictora)}
+  \item \texttt{is\_indie}: Booleano. Verdadero si el juego pertenece al género \textit{Indie}. \textit{(Variable predictora)}
+  \item \texttt{is\_strategy}: Booleano. Verdadero si el juego pertenece al género \textit{Strategy}. \textit{(Variable predictora)}
+  \item \texttt{is\_early\_access}: Booleano. Verdadero si el juego está en fase de Early Access. \textit{(Variable predictora)}
+  \item \texttt{is\_simulation}: Booleano. Verdadero si el juego pertenece al género \textit{Simulation}. \textit{(Variable predictora)}
+  \item \texttt{is\_massively\_multiplayer}: Booleano. Verdadero si el juego pertenece al género \textit{Massively Multiplayer}. \textit{(Variable predictora)}
+  \item \texttt{is\_rpg}: Booleano. Verdadero si el juego pertenece al género \textit{RPG}. \textit{(Variable predictora)}
+  \item \texttt{is\_racing}: Booleano. Verdadero si el juego pertenece al género \textit{Racing}. \textit{(Variable predictora)}
+  \item \texttt{is\_sports}: Booleano. Verdadero si el juego pertenece al género \textit{Sports}. \textit{(Variable predictora)}
+  \item \texttt{is\_casual}: Booleano. Verdadero si el juego pertenece al género \textit{Casual}. \textit{(Variable predictora)}
+  \item \texttt{is\_animation\_and\_modeling}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Animation \& Modeling}. \textit{(Variable predictora)}
+  \item \texttt{is\_design\_and\_illustration}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Design \& Illustration}. \textit{(Variable predictora)}
+  \item \texttt{is\_photo\_editing}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Photo Editing}. \textit{(Variable predictora)}
+  \item \texttt{is\_utilities}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Utilities}. \textit{(Variable predictora)}
+  \item \texttt{is\_game\_development}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Game Development}. \textit{(Variable predictora)}
+  \item \texttt{is\_education}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Education}. \textit{(Variable predictora)}
+  \item \texttt{is\_web\_publishing}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Web Publishing}. \textit{(Variable predictora)}
+  \item \texttt{is\_software\_training}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Software Training}. \textit{(Variable predictora)}
+  \item \texttt{is\_video\_production}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Video Production}. \textit{(Variable predictora)}
+  \item \texttt{is\_audio\_production}: Booleano. Verdadero si el producto pertenece a la categoría \textit{Audio Production}. \textit{(Variable predictora)}
+\end{itemize}
+```
+
+# Análisis de los datos
+
+## Análisis descriptivo
+
+```{=latex}
+Como paso previo al análisis, se realizó una exploración visual de la distribución de la variable objetivo \texttt{estimate\_sales} en función del tipo de producto. Para ello se separó el dataset en dos subconjuntos: juegos (excluyendo DLCs y OSTs) y DLCs (excluyendo OSTs), dado que ambos tipos de producto tienen dinámicas comerciales distintas y mezclarlos podría distorsionar los análisis posteriores.
+
+Las siguientes figuras muestran la distribución de ventas estimadas para cada subconjunto, diferenciando además entre productos indie y no indie.
+
+\vspace{0.4cm}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/estimate_sales_games.png}
+  \caption{Distribución de ventas estimadas según tipo de juego (Indie vs. No indie)}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/estimate_sales_dlcs.png}
+  \caption{Distribución de ventas estimadas según tipo de DLC (Indie vs. No indie)}
+\end{figure}
+
+Cabe destacar que en el caso de los DLCs la totalidad de los registros se concentra en la categoría de ventas más baja. Esto puede deberse a dos razones no necesariamente excluyentes. La primera, que los DLCs tengan inherentemente menos propietarios que el juego base al que pertenecen y, por tanto, no sean rentables. La segunda, que SteamSpy no contabilice correctamente las copias de DLCs al tratarse de un tipo de producto diferente a un juego independiente. En cualquier caso, este comportamiento nos lleva a tomar la decisión de excluirlos de los análisis posteriores de mercado (tanto DLCs como OSTs).
+
+\vspace{0.4cm}
+```
+
+```{r part6, echo=FALSE}
+# Fijar seed de aleatoriedad para reproducibilidad
+set.seed(42)
+
+total <- nrow(df)
+ost_count <- sum(df$is_ost, na.rm = TRUE)
+dlc_count <- sum(df$is_dlc, na.rm = TRUE)
+
+# Para los análisis, dividimos el dataset en dos con juegos y con DLCs (descartando también OSTs)
+df_games <- df %>%
+  filter(!is_ost, !is_dlc) %>%
+  select(-is_ost, -is_dlc)
+
+df_dlcs <- df %>%
+  filter(!is_ost, is_dlc) %>%
+  select(-is_ost, -is_dlc)
+
+sales_labels <- c("Bajas (<100k)", "Medio-bajas (100k-500k)", "Medias (500k-2M)", "Medio-altas (2M-10M)", "Altas (>10M)")
+
+cat("Recuento para análisis:\n")
+cat(sprintf("Números de OSTs: %4d (%4.1f%%)\n", ost_count, ost_count / total * 100))
+cat(sprintf("Números de DLCs: %4d (%4.1f%%)\n", dlc_count, dlc_count / total * 100))
+```
+
+## Modelo supervisado
+
+```{=latex}
+Se aplicó un modelo de Random Forest para predecir la variable objetivo \texttt{estimate\_sales} a partir del resto de variables predictoras. Los árboles de decisión que componen este modelo son especialmente adecuados para este problema por su capacidad de manejar variables mixtas (numéricas y booleanas) sin requerir normalización previa, y por proporcionar métricas de importancia de variables que permiten responder directamente a las preguntas de mercado planteadas.
+
+Para la evaluación del modelo se realizó una partición del dataset de juegos (excluyendo DLCs y OSTs) en un 80\% para entrenamiento y un 20\% para test, manteniendo las proporciones de clases en ambos subconjuntos (tal y como se muestra a continuación). El modelo se entrenó con 500 árboles.
+
+\vspace{0.4cm}
+```
+
+```{r part7, echo=FALSE}
+# Preparación de datos
+rf_data <- df_games %>%
+  select(-title)
+
+# Separación en conjuntos de Train y Test (80/20)
+train_idx <- createDataPartition(rf_data$estimate_sales, p = 0.8, list = FALSE)
+train <- rf_data[train_idx, ]
+test <- rf_data[-train_idx, ]
+
+cat(sprintf("Train: %d muestras\nTest:  %d muestras\n", nrow(train), nrow(test)))
+
+cat("Distribución de clases en train:\n")
+print(prop.table(table(train$estimate_sales)))
+cat("Distribución de clases en test:\n")
+print(prop.table(table(test$estimate_sales)))
+
+# Entrenamiento del modelo
+rf_model <- randomForest(estimate_sales ~ ., data = train, ntree = 500, importance = TRUE)
+```
+
+```{=latex}
+\vspace{0.4cm}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{figs/rf_confusion_matrix.png}
+  \caption{Matriz de confusión del modelo Random Forest sobre el conjunto de test}
+\end{figure}
+
+Para evaluar el rendimiento se utilizó la matriz de confusión sobre el conjunto de test, así como el F1 macro como métrica principal, dado que permite evaluar el rendimiento por clase de forma equilibrada ante el desbalance existente entre las distintas categorías. El modelo obtuvo una accuracy de $0.7867$ y un F1 macro de $0.6925$. La diferencia entre ambas métricas se explica principalmente por el bajo rendimiento en la clase \textit{high}, que concentra muy pocos registros en el dataset y para la cual el modelo tiene dificultades para generalizar por falta de ejemplos de entrenamiento suficientes.
+
+Este desbalance de clases puede venir dado por la propia distribución real del mercado de Steam, donde los juegos con ventas muy altas puedan ser una minoría. Las clases intermedias (\textit{medium\_high}, \textit{medium} y \textit{medium\_low}) presentan un rendimiento mejor, lo que indica que el modelo es útil para discriminar entre los rangos de ventas esperados. La clase \textit{low} es la que tiene un F1 mayor, siendo de $0.8791$.
+
+\vspace{0.4cm}
+```
+
+```{r part8, echo=FALSE}
+pred_sales <- predict(rf_model, newdata = test)
+
+# Matriz de confusión (test)
+cm <- confusionMatrix(pred_sales, test$estimate_sales)
+
+cm_df <- as.data.frame(cm$table) %>%
+  rename(Predicted = Prediction, Actual = Reference)
+
+# F1 scores por clase y macro
+f1_class <- cm$byClass[, "F1"]
+f1_macro <- mean(f1_class, na.rm = TRUE)
+cat(sprintf("F1 macro: %.4f\n", f1_macro))
+cat("\nF1 por clase:\n\n")
+print(round(f1_class, 4))
+```
+
+```{=latex}
+\vspace{0.4cm}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/rf_importance.png}
+  \caption{Variables más relevantes para el modelo Random Forest}
+\end{figure}
+
+\vspace{0.4cm}
+
+El análisis de importancia de variables, medido mediante \texttt{MeanDecreaseAccuracy}, permite identificar qué características del juego tienen mayor peso en la predicción de las ventas estimadas. La variable más importante con diferencia es \texttt{date}, lo que sugiere que la antigüedad o novedad del juego ha tenido un peso determinante en las ventas acumuladas. Le siguen \texttt{total\_reviews} y \texttt{total\_positive}, que miden el volumen y la calidad de las reseñas respectivamente, lo que indica que la recepción de los usuarios está fuertemente correlacionada con las ventas. El siguiente puesto lo ocupa \texttt{players\_peak}, confirmando que el pico histórico de jugadores es un buen proxy de popularidad comercial. Finalmente, las variables \texttt{required\_age} y \texttt{original\_price} también muestran que tanto la clasificación por edad como el precio tienen cierta capacidad discriminatoria.
+```
+
+## Modelo no supervisado
+
+```{=latex}
+Se aplicó un análisis de clustering mediante K-Means con el objetivo de identificar agrupaciones naturales en el catálogo de juegos de Steam y evaluar en qué medida estas agrupaciones se corresponden con los niveles de ventas estimadas.
+
+Como paso previo, se aplicó UMAP para reducir la dimensionalidad del espacio de variables y obtener una representación bidimensional sobre la que aplicar K-Means. Se optó por UMAP frente a PCA dado que, como se observa en la proyección PCA, las 10 primeras componentes acumulan únicamente el 58,7\% de la varianza explicada, con una contribución muy repartida entre componentes (la primera componente explica solo el 11,8\%).
+
+\vspace{0.4cm}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/pca.png}
+  \caption{Proyección PCA de los juegos por nivel de ventas estimadas}
+\end{figure}
+\vspace{0.4cm}
+```
+
+```{r part9, echo=FALSE}
+# Descartamos título y variable objetivo (estimate_sales)
+X_games <- df_games %>%
+  select(-title, -estimate_sales) %>%
+  mutate(date = as.integer(date), across(where(is.logical), as.integer))
+
+X_dlc <- df_dlcs %>%
+  select(-title, -estimate_sales) %>%
+  mutate(date = as.integer(date), across(where(is.logical), as.integer))
+
+# PCA
+pca_result <- prcomp(X_games, center = TRUE, scale. = TRUE)
+
+X_games_PCA <- as.data.frame(pca_result$x[, 1:2]) %>%
+  mutate(estimate_sales = df_games$estimate_sales)
+
+var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+cum_var <- cumsum(var_explained)
+
+cat("Utilizando PCA se tiene:\n")
+cat("- Varianza explicada por 10 primeras componentes:\n")
+print(round(var_explained[1:10], 3))
+cat("- Varianza acumulada para cada componente:\n")
+print(round(cum_var[1:10], 3))
+```
+
+```{=latex}
+\vspace{0.4cm}
+Para determinar el número óptimo de clusters se aplicó el método del codo, evaluando la suma de cuadrados intra-cluster (WCSS) para valores de $k$ entre 1 y 10.
+
+\vspace{0.4cm}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/elbow_method.png}
+  \caption{Método del codo para la selección del número de clusters}
+\end{figure}
+
+El gráfico muestra un codo claro en $k = 3$, lo que sugiere que tres clusters es la partición más natural de los datos. No obstante, dado que la variable objetivo \texttt{estimate\_sales} tiene cinco niveles, se realizaron dos experimentos: uno con $k = 5$ para intentar recuperar la granularidad original, y otro con $k = 3$ fusionando las clases intermedias y altas en una única categoría.
+
+\subsubsection*{K-Means con $k = 5$}
+
+Con $k = 5$ el modelo obtiene un accuracy del 47,7\%. Observando la matriz de contingencia se aprecia que los clusters se alinean razonablemente bien con las clases \textit{low} y \textit{medium\_low}, pero el modelo tiene grandes dificultades para distinguir las clases superiores (\textit{medium\_high} y \textit{high}), que prácticamente no aparecen en ningún cluster de forma predominante. Esto es consistente con el hecho de que los juegos con ventas muy altas son una minoría y no forman agrupaciones densas y diferenciadas en el espacio UMAP.
+```
+
+```{r part10, echo=FALSE}
+# UMAP
+umap_result <- umap(X_games, n_components = 2, n_neighbors = 15, min_dist = 0.2, metric = "euclidean")
+
+X_games_UMAP <- as.data.frame(umap_result[, 1:2]) %>%
+  mutate(estimate_sales = df_games$estimate_sales)
+
+# Aplicación de K-Means (con clusters esperados: 5 categorías de ventas estimadas)
+n_clusters <- 5
+kmeans_result <- kmeans(umap_result, centers = n_clusters, nstart = 25, iter.max = 100)
+X_games_UMAP$cluster <- factor(kmeans_result$cluster)
+
+# Matriz de contingencia (sin ordenar)
+df_games$cluster <- factor(kmeans_result$cluster)
+cont_mat <- table(Cluster = df_games$cluster, Ventas = df_games$estimate_sales)
+
+# Asignación óptima de clusters a clases
+assignment <- solve_LSAP(cont_mat, maximum = TRUE)
+# Mapear clusters a categorías de ventas según asignación óptima
+cluster_to_sales <- colnames(cont_mat)[as.integer(assignment)]
+names(cluster_to_sales) <- rownames(cont_mat)
+
+assignment_order <- order(assignment)
+df_games$cluster <- factor(df_games$cluster, levels = assignment_order)
+
+# Matriz de contingencia (orden óptimo)
+cont_mat <- table(Cluster = df_games$cluster, Ventas = df_games$estimate_sales)
+
+# Medir accuracy
+y_pred <- cluster_to_sales[as.character(df_games$cluster)]
+y_real <- df_games$estimate_sales
+accuracy <- mean(y_pred == y_real, na.rm = TRUE)
+cat(sprintf("Accuracy: %.1f%%\n", accuracy * 100))
+```
+
+```{=latex}
+\vspace{0.4cm}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{figs/kmeans_contingency_mat.png}
+  \caption{Matriz de contingencia entre clusters y ventas estimadas ($k = 5$)}
+\end{figure}
+\vspace{0.4cm}
+
+\subsubsection*{K-Means con $k = 3$}
+
+Al reducir a tres niveles (nuevas categorías para ventas bajas, medias y altas), la accuracy sube al 71,1\%, un resultado considerablemente mejor y coherente con lo visto por el método del codo. La matriz de contingencia muestra que los tres clusters se corresponden de forma bastante limpia con los tres niveles de ventas, con el cluster de ventas altas mucho mejor ahora. Existe por tanto una estructura visible en los datos que diferencia a grandes rasgos los juegos con pocas ventas, ventas medias y ventas altas, siendo la diferenciación en cinco niveles demasiado grande para que el clustering no supervisado la recupere con fiabilidad.
+```
+
+```{r part11, echo=FALSE}
+# Re-aplicación de K-Means (con clusters de elbow rule y clases fusionadas)
+df_games$estimate_sales_3c <- df_games$estimate_sales
+levels(df_games$estimate_sales_3c) <- c("low", "medium", "high", "high", "high")
+
+n_clusters <- 3
+kmeans_result_3c <- kmeans(umap_result, centers = n_clusters, nstart = 25, iter.max = 100)
+X_games_UMAP$cluster_3c <- factor(kmeans_result_3c$cluster)
+X_games_UMAP$estimate_sales_3c <- df_games$estimate_sales_3c
+
+# Matriz de contingencia (sin ordenar)
+df_games$cluster_3c <- factor(kmeans_result_3c$cluster)
+cont_mat_3c <- table(Cluster = df_games$cluster_3c, Ventas = df_games$estimate_sales_3c)
+
+# Asignación óptima de clusters a clases
+assignment_3c <- solve_LSAP(cont_mat_3c, maximum = TRUE)
+# Mapear clusters a categorías de ventas según asignación óptima
+cluster_to_sales_3c <- colnames(cont_mat_3c)[as.integer(assignment_3c)]
+names(cluster_to_sales_3c) <- rownames(cont_mat_3c)
+
+assignment_order_3c <- order(assignment_3c)
+df_games$cluster_3c <- factor(df_games$cluster_3c, levels = assignment_order_3c)
+
+# Matriz de contingencia (orden óptimo)
+cont_mat_3c <- table(Cluster = df_games$cluster_3c, Ventas = df_games$estimate_sales_3c)
+
+# Medir accuracy
+y_pred_3c <- cluster_to_sales_3c[as.character(df_games$cluster_3c)]
+y_real_3c <- df_games$estimate_sales_3c
+accuracy_3c <- mean(y_pred_3c == y_real_3c, na.rm = TRUE)
+cat(sprintf("Accuracy: %.1f%%\n", accuracy_3c * 100))
+```
+
+```{=latex}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{figs/kmeans_contingency_mat_3c.png}
+  \caption{Matriz de contingencia entre clusters y ventas estimadas ($k = 3$)}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.775\textwidth]{figs/umap.png}
+  \caption{Proyección UMAP}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{figs/kmeans_umap.png}
+  \caption{Clusters K-Means ($k = 5$) sobre proyección UMAP}
+\end{figure}
+
+\vspace{0.4cm}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{figs/kmeans_umap_3c.png}
+  \caption{Clusters K-Means ($k = 3$) sobre proyección UMAP}
+\end{figure}
+
+```
+
+## Contraste de hipótesis
+
+```{=latex}
+Se plantea el siguiente contraste unilateral sobre el precio medio de los juegos en función de si están en Early Access o no:
+
+\begin{itemize}
+  \setlength{\itemsep}{-2pt}
+  \item \textbf{H0}: El precio medio de los juegos en Early Access es igual al del resto.
+  \item \textbf{H1}: Los juegos en Early Access son más baratos en promedio que el resto.
+\end{itemize}
+
+\vspace{0.4cm}
+```
+
+```{r part12, echo=FALSE}
+## Parte 4. Contraste de hipótesis
+early_games <- df_games[df_games$is_early_access == TRUE, ]
+nonearly_games <- df_games[df_games$is_early_access == FALSE, ]
+
+# Limpieza de outliers
+cat("Juegos en early access:\n")
+cat("Número de muestras:", nrow(early_games),"\n")
+print(summary(early_games$original_price))
+cat("Juegos fuera de early access:\n")
+cat("Número de muestras:", nrow(nonearly_games),"\n")
+print(summary(nonearly_games$original_price))
+cat("COMPROBACIÓN (outliers): Juegos caros (precio > 100€):", nrow(nonearly_games[nonearly_games$original_price >= 80, ]), "\n")
+
+# Corrección: eliminación de juegos superiores a 80€
+nonearly_games <- nonearly_games[nonearly_games$original_price < 80, ]
+# También en df para guardar
+df <- df[df$original_price < 80, ]
+```
+
+```{=latex}
+\vspace{0.4cm}
+
+Antes de aplicar el contraste se revisaron los datos de ambos grupos. Como se indicó en el apartado de tratamiento de valores extremos, se eliminaron los juegos con precio superior a 80€ del grupo de no Early Access por tratarse de productos especializados no representativos.
+
+Ambos grupos cuentan con un número de muestras suficientemente grande como para que, por el Teorema Central del Límite, se pueda asumir que la distribución de las medias muestrales se aproxima a una normal, lo que permite aplicar pruebas sin necesidad de verificar la normalidad de los datos originales.
+
+A continuación se comprobó si las varianzas de ambos grupos eran iguales mediante el test F de Levene, requisito previo para determinar qué variante de la prueba t aplicar.
+
+\vspace{0.4cm}
+```
+
+```{r part13, echo=FALSE}
+# Test de homocedasticidad
+var_test <- var.test(early_games$original_price, nonearly_games$original_price)
+print(var_test)
+```
+
+```{=latex}
+\vspace{0.4cm}
+
+El test F obtiene un p-valor inferior a $2.2 \times 10^{-16}$, por lo que se rechaza la hipótesis de igualdad de varianzas (es decir, no hay heterocedasticidad).
+
+\vspace{0.4cm}
+```
+
+```{r part14, echo=FALSE}
+# Test de Welch
+welch_test <- t.test(early_games$original_price, nonearly_games$original_price, alternative = "less", var.equal = FALSE)
+print(welch_test)
+```
+
+```{=latex}
+\vspace{0.4cm}
+
+En consecuencia, se aplicó el test de Welch, que es la variante de la prueba t que no asume varianzas iguales entre grupos. El test de Welch obtiene igualmente un p-valor inferior a $2.2 \times 10^{-16}$, muy por debajo del nivel de significancia $\alpha = 0.05$, con lo que se rechaza \textbf{H0}.
+
+\vspace{0.4cm}
+```
+
+```{r part15, echo=FALSE}
+# Calcular las medias para interpretar
+mean_early <- mean(early_games$original_price)
+mean_nonearly <- mean(nonearly_games$original_price)
+dif <- mean_nonearly - mean_early
+
+cat("RESUMEN (Contraste de hipótesis):\n")
+cat("- Precio medio (juegos en early access):\t", round(mean_early, 2))
+cat("- Precio medio (juegos fuera de early access):\t", round(mean_nonearly, 2))
+cat("Diferencia:", round(dif, 2))
+
+alpha <- 0.05
+if (welch_test$p.value < alpha) {
+  cat("Conclusión: Se rechaza H0. Los juegos en early access son más baratos.")
+} else {
+  cat("Conclusión: No se puede rechazar H0 a favor de H1.")
+}
+```
+
+```{=latex}
+\vspace{0.4cm}
+
+Los precios medios obtenidos son $18.27$€ para los juegos en Early Access y $21.97$€ para el resto, con una diferencia de $3.70$€. Si bien esta diferencia es estadísticamente significativa, el tamaño del efecto debe evaluarse para determinar su relevancia práctica.
+
+\vspace{0.4cm}
+```
+
+```{r part16, echo=FALSE}
+# Tamaño del efecto
+cohen_d <- cohen.d(early_games$original_price, nonearly_games$original_price)
+print(cohen_d)
+```
+
+```{=latex}
+\vspace{0.4cm}
+
+La d de Cohen obtiene un valor de $-0.264$, lo que se considera un efecto pequeño. Esto indica que, aunque la diferencia de precios es estadísticamente significativa considerando el tamaño muestral, su diferencia práctica es moderada. En conclusión, los juegos en Early Access tienden a ser algo más baratos que el resto, pero la diferencia no es lo suficientemente grande como para considerarse un factor determinante a considerar en la estrategia de precios.
+```
+
+# Representación de los resultados
+
+```{=latex}
+Las representaciones gráficas generadas durante el análisis se han incorporado a lo largo del documento, en el apartado correspondiente a cada técnica aplicada. Este enfoque permite interpretar cada visualización en su contexto inmediato, facilitando la comprensión de los resultados sin necesidad de concentrarlos en una sección separada.
+```
+
+
+# Resolución del problema
+
+```{=latex}
+Los análisis realizados permiten responder de forma razonada a la pregunta planteada: ¿qué factores determinan el éxito comercial de un videojuego en Steam?
+
+El modelo de Random Forest identifica el trimestre de lanzamiento, el volumen y calidad de reseñas, y el pico histórico de jugadores como los factores con mayor capacidad predictiva sobre las ventas estimadas. El precio y la clasificación por edad tienen un peso secundario pero no despreciable, mientras que el género por sí solo resulta poco discriminante una vez controlado el resto de variables.
+
+El clustering K-Means sobre la proyección UMAP confirma que existe una estructura latente en los datos que diferencia a grandes rasgos tres perfiles de juego según sus ventas.
+
+Por último, el contraste de hipótesis muestra que los juegos en Early Access tienden a tener precios ligeramente inferiores a los del resto, aunque el tamaño del efecto es pequeño y su relevancia práctica es limitada.
+
+En conjunto, los resultados ofrecen una base cuantitativa útil para orientar decisiones estratégicas de desarrollo y publicación.
+```
+
+# Código
+
+```{=latex}
+El código utilizado a lo largo de esta práctica se encuentra disponible en el repositorio del proyecto. Para simplificar el proceso, se han utilizado dos archivos:
+
+\begin{itemize}
+  \item \texttt{scraping.R}: Recoge únicamente la parte de integración.\\
+  Devuelve: '\texttt{steam\_apps\_temp.csv}' (archivo CSV intermedio).
+  
+  \item \texttt{cleaning\_and\_analysis.R}: Recoge el resto de partes: limpieza, análisis y visualización de los datos.\\
+  Devuelve: '\texttt{steam\_apps\_cleaned.csv}' (archivo CSV final limpio).
+\end{itemize}
+
+\vspace{0.2cm}
+\textbf{URL}: \url{https://github.com/adriancordones/steam-apps-analysis}
+```
+
+# Vídeo
+
+```{=latex}
+El vídeo explicativo de la práctica está disponible en el siguiente enlace:
+
+\vspace{0.2cm}
+\textbf{URL}: \url{https://...}
+
+\newpage
+```
+
+# Participación de los integrantes {-}
+
+```{=latex}
+{\renewcommand{\arraystretch}{1.8}
+\setlength{\arrayrulewidth}{1pt}
+
+A continuación, se muestra la tabla de firmas que recoge la contribución de cada integrante a la práctica.
+
+\vspace{0.4cm}
+\begin{tabularx}{\linewidth}{|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X|}
+  \hline
+  \rowcolor{bluetext!20}
+  \textbf{Contribuciones} & \textbf{Firma} \\
+  \hline
+  Investigación previa & \textit{ACM, ABB} \\
+  \hline
+  Redacción de las respuestas & \textit{ACM, ABB} \\
+  \hline
+  Desarrollo del código & \textit{ACM, ABB} \\
+  \hline
+  Participación en el vídeo & \textit{ACM, ABB} \\
+  \hline
+\end{tabularx}}
+
+\vspace{0.5cm}
+```
+
+<!-- Referencias -->
+
+```{=latex}
+\begin{thebibliography}{9}\label{ref:Ref}
+  
+  \bibitem{R1} Subirats, L., Pérez, D.O., Calvo, M. (2019). \textit{Introducción al ciclo de vida de los datos}. [Recurso de aprendizaje textual]. 1.a ed. Barcelona: Fundació Universitat Oberta de Catalunya (FUOC).
+  
+  \bibitem{R2} Munzert, S., Rubba, C., Meißner, P., Nyhuis, D. (2015). \textit{Automated Data Collection with R: A Practical Guide to Web Scraping and Text Mining}. John Wiley \& Sons, Ltd. ISBN: 978-1-118-83481-7
+  
+  \bibitem{R3} Gamalytic. (2023). \textit{How to Accurately Estimate Steam Sales}. URL: \url{https://gamalytic.com/blog/how-to-accurately-estimate-steam-sales}
+  
+  \bibitem{R4} Valve Corporation. (s.f.). \textit{Steam Web API Documentation}. URL: \url{https://steamcommunity.com/dev}
+
+  \bibitem{R5} Steam Spy. (s.f.). \textit{Steam Spy API}. URL: \url{https://www.steamspy.com/api.php}
+  
+  \bibitem{R6} IsThereAnyDeal. (2026). \textit{IsThereAnyDeal API (2.9.0) Documentation}. URL: \url{https://docs.isthereanydeal.com/}
+\end{thebibliography}
+```

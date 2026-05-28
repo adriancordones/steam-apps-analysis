@@ -3,5 +3,8 @@ __pycache__/
 .venv/
 .vscode/
 .Rhistory
+.RData
 .Rproj.user
 .Renviron
+steam-apps-analysis.Rproj
+.positai

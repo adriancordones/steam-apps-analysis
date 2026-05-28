@@ -4,7 +4,7 @@ library(stringr)
 
 # Variables para hacer pruebas
 # En la ejecución final 'test_mode' debe estar en FALSE !!!
-test_mode <- TRUE
+test_mode <- FALSE
 test_n <- 1000
 
 # Archivo privado con la API-key de ITAD
