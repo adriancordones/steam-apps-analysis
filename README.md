@@ -17,7 +17,7 @@ Análisis estadístico utilizando datos recopilados de aplicaciones publicadas e
 - `source/cleaning_and_analysis.R`: Parte del código que realiza la limpieza, análisis y visualización.
 - `datasets/steam_apps.csv`: Dataset de partida (creado en la Práctica 1).
 - `datasets/steam_apps_temp.csv`: Dataset con variables integradas sin limpiar.
-- `datasets/steam_apps:cleaned.csv`: Dataset resultante de limpieza y análisis.
+- `datasets/steam_apps_cleaned.csv`: Dataset resultante de limpieza y análisis.
 - `docs/memoria.pdf`: Memoria del proyecto resultante de ejecutar `docs/memoria.rmd`.
 
 ## Integrantes del grupo
