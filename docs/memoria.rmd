@@ -33,7 +33,7 @@ output:
     \url{https://github.com/adriancordones/steam-apps-analysis}
     
   \item \textbf{Enlace al vídeo de explicación:}\\
-    \url{https://...}
+    \url{https://drive.google.com/file/d/1VUocaLAoLhYm-pNYO8OvcTBcsaSamJK1/view}
 }
 ```
 
@@ -660,7 +660,7 @@ print(summary(early_games$original_price))
 cat("Juegos fuera de early access:\n")
 cat("Número de muestras:", nrow(nonearly_games),"\n")
 print(summary(nonearly_games$original_price))
-cat("COMPROBACIÓN (outliers): Juegos caros (precio > 100€):", nrow(nonearly_games[nonearly_games$original_price >= 80, ]), "\n")
+cat("COMPROBACIÓN (outliers): Juegos caros (precio > 80€):", nrow(nonearly_games[nonearly_games$original_price >= 80, ]), "\n")
 
 # Corrección: eliminación de juegos superiores a 80€
 nonearly_games <- nonearly_games[nonearly_games$original_price < 80, ]
@@ -744,7 +744,9 @@ print(cohen_d)
 ```{=latex}
 \vspace{0.4cm}
 
-La d de Cohen obtiene un valor de $-0.264$, lo que se considera un efecto pequeño. Esto indica que, aunque la diferencia de precios es estadísticamente significativa considerando el tamaño muestral, su diferencia práctica es moderada. En conclusión, los juegos en Early Access tienden a ser algo más baratos que el resto, pero la diferencia no es lo suficientemente grande como para considerarse un factor determinante a considerar en la estrategia de precios.
+La d de Cohen obtiene un valor de $-0.264$, lo que se considera un efecto pequeño. Esto indica que, aunque la diferencia de precios es estadísticamente significativa considerando el tamaño muestral, su diferencia práctica es moderada. En conclusión, los juegos en Early Access tienden a ser algo más baratos que el resto, pero la diferencia no es lo suficientemente grande como para considerarse un factor determinante.
+
+\newpage
 ```
 
 # Representación de los resultados
@@ -791,7 +793,7 @@ El código utilizado a lo largo de esta práctica se encuentra disponible en el 
 El vídeo explicativo de la práctica está disponible en el siguiente enlace:
 
 \vspace{0.2cm}
-\textbf{URL}: \url{https://...}
+\textbf{URL}: \url{https://drive.google.com/file/d/1VUocaLAoLhYm-pNYO8OvcTBcsaSamJK1/view}
 
 \newpage
 ```

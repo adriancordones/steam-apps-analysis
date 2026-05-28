@@ -416,7 +416,7 @@ print(summary(early_games$original_price))
 cat("\nJuegos fuera de early access:\n")
 cat("\nNº de muestras:", nrow(nonearly_games),"\n")
 print(summary(nonearly_games$original_price))
-cat("\nCOMPROBACIÓN (outliers): Juegos caros (precio > 100€):", nrow(nonearly_games[nonearly_games$original_price >= 80, ]), "\n")
+cat("\nCOMPROBACIÓN (outliers): Juegos caros (precio > 80€):", nrow(nonearly_games[nonearly_games$original_price >= 80, ]), "\n")
 
 # Gráfica: boxplot
 df_price <- bind_rows(early_games %>% select(original_price) %>% mutate(group = "Early Access"),
